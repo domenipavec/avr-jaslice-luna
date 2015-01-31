@@ -27,7 +27,7 @@
 //#include <util/delay.h>
 
 #include <avr/io.h>
-//#include <avr/interrupt.h>
+#include <avr/interrupt.h>
 //#include <avr/pgmspace.h>
 //#include <avr/eeprom.h> 
 
@@ -35,12 +35,100 @@
 
 #include "bitop.h"
 
-int main() {
-	// init
-	
-	
-	// enable interrupts
-	//sei();
+static const uint8_t I2C_ADDRESS = 0x52;
 
-	for (;;);
+int main() {
+    // init
+    /**
+     * PA0 ... part 5
+     * PA1 ... part 4
+     * PA2 ... part 3
+     * PA3 ... part 2
+     * PB1 ... part 1
+     * PB0 ... supply on
+     */
+    DDRA = 0b00001111;
+    DDRB = 0b00000011;
+
+    // init i2c
+    TWSCRA = 0b00111000;
+    TWSA = I2C_ADDRESS<<1;
+
+    // enable interrupts
+    sei();
+
+    for (;;);
+}
+
+ISR(TWI_SLAVE_vect) {
+    static uint8_t state;
+    if (BITSET(TWSSRA, TWASIF)) {
+        // received address/stop
+        if (BITSET(TWSSRA, TWAS)) {
+            // received address
+            if (BITSET(TWSSRA, TWDIR)) {
+                // read operation
+                TWSCRB = 0b00000110;
+            } else {
+                // write operation
+                state = 0;
+                TWSCRB = 0b00000011;
+            }
+        } else {
+            // received stop
+            TWSCRB = 0b00000010;
+        }
+    } else if (BITSET(TWSSRA, TWDIF)) {
+        // received data
+        if (state == 0) {
+            state++;
+            uint8_t v = TWSD;
+            switch (v) {
+                case 1:
+                    PORTA = 0;
+                    PORTB = 0b011;
+                    break;
+                case 2:
+                    PORTA = 0b01000;
+                    PORTB = 0b011;
+                    break;
+                case 3:
+                    PORTA = 0b01100;
+                    PORTB = 0b011;
+                    break;
+                case 4:
+                    PORTA = 0b01110;
+                    PORTB = 0b011;
+                    break;
+                case 5:
+                    PORTA = 0b01111;
+                    PORTB = 0b011;
+                    break;
+                case 6:
+                    PORTA = 0b01111;
+                    PORTB = 0b001;
+                    break;
+                case 7:
+                    PORTA = 0b00111;
+                    PORTB = 0b001;
+                    break;
+                case 8:
+                    PORTA = 0b00011;
+                    PORTB = 0b001;
+                    break;
+                case 9:
+                    PORTA = 0B00001;
+                    PORTB = 0b001;
+                    break;
+                default:
+                    PORTA = 0;
+                    PORTB = 0;
+                    break;
+            }
+        }
+        
+        TWSCRB = 0b00000011;
+    } else {
+        TWSCRB = 0b00000111;
+    }
 }
